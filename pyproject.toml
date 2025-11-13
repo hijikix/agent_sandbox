@@ -6,5 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "marimo>=0.17.7",
+    "openai>=2.7.2",
+    "pydantic>=2.12.4",
     "python-dotenv>=1.2.1",
+    "rich>=14.2.0",
 ]
