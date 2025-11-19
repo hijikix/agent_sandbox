@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.7"
+__generated_with = "0.17.8"
 app = marimo.App(width="medium")
 
 
@@ -25,7 +25,7 @@ def _():
 @app.cell
 def _(mo):
     mo.md(r"""
-    ### 色々なパターンでマルチホップを行ってみます
+    ### tool callを連続的に行ってマルチホップ行うパターン
     """)
     return
 
@@ -97,8 +97,6 @@ def _(rprint):
             response = "アンギラの国際通話料金は9999円/1分です。"
         elif 'アンギラ' in keywords or "Angila" in keywords or "Angira" in keywords:
             response = "アンギラの国際通話料金は国別料金表3に記載されています。"
-        elif '国別料金表3' in keywords:
-            response = "アンギラの国際通話料金は9999円/1分です。"
         else:
             response = "情報が見つかりませんでした。"
 
@@ -249,7 +247,7 @@ def _(
 
         # # 網羅的な組み合わせを生成
         combinations = list(product(GPT5_MODELS, GPT5_REASONING_EFFORTS, GPT5_TEXT_VERBOSITIES))
-    
+
         # 結果を表示
         for i, (model, effort, verbosity) in enumerate(combinations, 1):
             output = gen_multi_hop_gpt5(input, model, effort, verbosity)
