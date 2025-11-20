@@ -181,7 +181,6 @@ def _(
 
             # リフレクション
             rprint("### reflection")
-            rprint(input)
             input += [
                 {
                     "role": "user",
@@ -197,14 +196,14 @@ def _(
             rprint("### reflection_result")
             rprint(reflection_result)
             if reflection_result.is_completed:
-                return answer
+                return answer, input
 
             # 反省点を追加して次のループへ
             input += response.output
 
         # 最大試行回数に達した場合
         print(f"警告: 最大試行回数({MAX_REFLECTIONS})に達しました")
-        return response.output
+        return response.output, input
     return (gen_multi_hop_gpt4,)
 
 
@@ -276,7 +275,6 @@ def _(
 
             # リフレクション
             rprint("### reflection")
-            rprint(input)
             input += [
                 {
                     "role": "user",
@@ -298,14 +296,14 @@ def _(
             rprint("### reflection_result")
             rprint(reflection_result)
             if reflection_result.is_completed:
-                return answer
+                return answer, input
 
             # 反省点を追加して次のループへ
             input += response.output
 
         # 最大試行回数に達した場合
         print(f"警告: 最大試行回数({MAX_REFLECTIONS})に達しました")
-        return response.output
+        return response.output, input
     return (gen_multi_hop_gpt5,)
 
 
@@ -360,9 +358,10 @@ def _(
         ]
 
         for model in GPT4_MODELS:
-            output = gen_multi_hop_gpt4(input, model)
+            output, _input = gen_multi_hop_gpt4(input, model)
             rprint({
                 "model": model,
+                "input": _input,
                 "output": output,
             })
 
@@ -371,9 +370,10 @@ def _(
 
         # 結果を表示
         for i, (model, effort, verbosity) in enumerate(combinations, 1):
-            output = gen_multi_hop_gpt5(input, model, effort, verbosity)
+            output, _input = gen_multi_hop_gpt5(input, model, effort, verbosity)
             rprint({
                 "model": model,
+                "input": _input,
                 "effort": effort,
                 "verbosity": verbosity,
                 "output": output,
