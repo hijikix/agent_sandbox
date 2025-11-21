@@ -43,9 +43,9 @@ def _():
 def _():
     # GPT5系のモデル
     GPT5_MODELS = [
-        "gpt-5-nano-2025-08-07",
+        # "gpt-5-nano-2025-08-07",
         # "gpt-5-mini-2025-08-07",
-        # "gpt-5-2025-08-07",
+        "gpt-5-2025-08-07",
     ]
 
     # APIコール時のパラメータもパターンを用意する
@@ -105,7 +105,7 @@ def _(rprint):
         """
         if '国別料金表3' in keywords:
             response = "アンギラの国際通話料金は9999円/1分です。"
-        elif 'アンギラ' in keywords or "Angila" in keywords or "Angira" in keywords:
+        elif 'アンギラ' in keywords or "Angila" in keywords or "Angira" in keywords or "Anguilla" in keywords:
             response = "アンギラの国際通話料金は国別料金表3に記載されています。"
         else:
             response = "情報が見つかりませんでした。"
@@ -176,8 +176,7 @@ def _(
                 model=model,
                 input=input,
             )
-            answer = response.output
-            input += answer
+            input += response.output
 
             # リフレクション
             rprint("### reflection")
@@ -192,18 +191,24 @@ def _(
                 input=input,
                 text_format=ReflectionResult,
             )
+            input += response.output
             reflection_result = response.output_parsed
             rprint("### reflection_result")
             rprint(reflection_result)
             if reflection_result.is_completed:
-                return answer, input
+                return input
 
-            # 反省点を追加して次のループへ
-            input += response.output
+            # 次のループへ
+            input += [
+                {
+                    "role": "user",
+                    "content": "1. ツール選択・実行して回答を生成をリフレクションの結果に従ってやり直してください"
+                }
+            ]
 
         # 最大試行回数に達した場合
         print(f"警告: 最大試行回数({MAX_REFLECTIONS})に達しました")
-        return response.output, input
+        return input
     return (gen_multi_hop_gpt4,)
 
 
@@ -270,8 +275,7 @@ def _(
                 },
                 input=input,
             )
-            answer = response.output
-            input += answer
+            input += response.output
 
             # リフレクション
             rprint("### reflection")
@@ -292,18 +296,25 @@ def _(
                 input=input,
                 text_format=ReflectionResult,
             )
+            input += response.output
             reflection_result = response.output_parsed
             rprint("### reflection_result")
             rprint(reflection_result)
             if reflection_result.is_completed:
-                return answer, input
+                return input
 
-            # 反省点を追加して次のループへ
-            input += response.output
+            # 次のループへ
+            input += [
+                {
+                    "role": "user",
+                    "content": "1. ツール選択・実行して回答を生成をリフレクションの結果に従ってやり直してください"
+                }
+            ]
+
 
         # 最大試行回数に達した場合
         print(f"警告: 最大試行回数({MAX_REFLECTIONS})に達しました")
-        return response.output, input
+        return input
     return (gen_multi_hop_gpt5,)
 
 
@@ -358,11 +369,10 @@ def _(
         ]
 
         for model in GPT4_MODELS:
-            output, _input = gen_multi_hop_gpt4(input, model)
+            _input = gen_multi_hop_gpt4(input, model)
             rprint({
                 "model": model,
                 "input": _input,
-                "output": output,
             })
 
         # # 網羅的な組み合わせを生成
@@ -370,13 +380,12 @@ def _(
 
         # 結果を表示
         for i, (model, effort, verbosity) in enumerate(combinations, 1):
-            output, _input = gen_multi_hop_gpt5(input, model, effort, verbosity)
+            _input = gen_multi_hop_gpt5(input, model, effort, verbosity)
             rprint({
                 "model": model,
                 "input": _input,
                 "effort": effort,
                 "verbosity": verbosity,
-                "output": output,
             })
 
     _()
