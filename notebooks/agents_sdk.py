@@ -46,9 +46,15 @@ async def _(Agent, Runner, function_tool, rprint):
         })
         return [response]
 
+
+    INSTARUCTIONS = """
+    あなたは優秀な検索エージェントです。
+    検索で得た情報に不足があれば、再度検索を行っても構いません。
+    """
+
     agent = Agent(
-        name="Hello world",
-        instructions="You are a helpful agent.",
+        name="検索エージェント",
+        instructions=INSTARUCTIONS,
         tools=[search_documents],
     )
 
