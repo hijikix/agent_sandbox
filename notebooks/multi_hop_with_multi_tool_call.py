@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.8"
+__generated_with = "0.18.1"
 app = marimo.App(width="medium")
 
 
@@ -43,8 +43,8 @@ def _():
 def _():
     # GPT5系のモデル
     GPT5_MODELS = [
-        # "gpt-5-nano-2025-08-07",
-        "gpt-5-mini-2025-08-07",
+        "gpt-5-nano-2025-08-07",
+        # "gpt-5-mini-2025-08-07",
         "gpt-5-2025-08-07",
     ]
 
@@ -89,22 +89,53 @@ def _(rprint):
         },
     ]
 
-    def search_documents(keywords):
-        """
-        keywords: "キーワード1, キーワード2, キーワード3..."
-        """
-        if '国別料金表3' in keywords:
-            response = "アンギラの国際通話料金は9999円/1分です。"
-        elif 'アンギラ' in keywords or "Angila" in keywords or "Angira" in keywords:
-            response = "アンギラの国際通話料金は国別料金表3に記載されています。"
+    from difflib import SequenceMatcher
+    import re
+
+    def _normalize(text: str) -> str:
+        return text.lower()
+
+    def _fuzzy_contains(
+        keywords: str, terms: tuple[str, ...], threshold: float = 0.72
+    ) -> bool:
+        if not keywords:
+            return False
+
+        haystack = _normalize(keywords)
+        normalized_terms = tuple(_normalize(term) for term in terms)
+
+        if any(term in haystack for term in normalized_terms):
+            return True
+
+        tokens = [token for token in re.split(r"[\s,、。]+", haystack) if token]
+        for token in tokens:
+            for term in normalized_terms:
+                if SequenceMatcher(None, token, term).ratio() >= threshold:
+                    return True
+
+        for term in normalized_terms:
+            if SequenceMatcher(None, haystack, term).ratio() >= threshold:
+                return True
+        return False
+
+    TABLE_TERMS = ("国別料金表3", "table 3")
+    TABLE_RESPONSE = "アンギラの国際通話料金は9999円/1分です。"
+
+    ANGUILLA_TERMS = ("アンギラ", "anguilla", "angila", "angira")
+    ANGUILLA_RESPONSE = "アンギラの国際通話料金は国別料金表3に記載されています。"
+
+    UNKNOWN_RESPONSE = "情報が見つかりませんでした。"
+
+    def search_documents(keywords: str) -> list[str]:
+        if _fuzzy_contains(keywords, TABLE_TERMS):
+            response = TABLE_RESPONSE
+        elif _fuzzy_contains(keywords, ANGUILLA_TERMS):
+            response = ANGUILLA_RESPONSE
         else:
-            response = "情報が見つかりませんでした。"
+            response = UNKNOWN_RESPONSE
 
         print(">>> search_documents called")
-        rprint({
-            'keywords': keywords,
-            "response": response
-        })
+        rprint({"keywords": keywords, "response": response})
         return [response]
     return client, search_documents, tools
 
@@ -122,7 +153,6 @@ def _(MAX_FUNCTION_CALLS, client, copy, json, rprint, search_documents, tools):
         input = copy.deepcopy(input_org)
         for i in range(MAX_FUNCTION_CALLS):
             rprint(f">>> Iteration {i + 1}/{MAX_FUNCTION_CALLS}")
-            rprint(input)
             response = client.responses.create(
                 model=model,
                 input=input,
@@ -161,7 +191,6 @@ def _(MAX_FUNCTION_CALLS, client, copy, json, rprint, search_documents, tools):
         input = copy.deepcopy(input_org)
         for i in range(MAX_FUNCTION_CALLS):
             rprint(f">>> Iteration {i + 1}/{MAX_FUNCTION_CALLS}")
-            rprint(input)
             response = client.responses.create(
                 model=model,
                 reasoning={
@@ -221,10 +250,13 @@ def _(
     def _():
         SYSTEM_PROMPT = """
     あなたは優秀な情報検索者です。
+
+    与えられたツールを使って情報を検索しユーザの質問に答えてください。
+    検索された情報に不足があれば、再度検索を行っても構いません。
     """
 
         USER_PROMPT = """
-    アンギラの国際通話の料金をドキュメントデータベースから検索して教えてください。
+    アンギラの国際通話の料金を教えてください。
     """
 
         input = [
