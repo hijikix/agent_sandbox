@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.8"
+__generated_with = "0.18.1"
 app = marimo.App(width="medium")
 
 
@@ -43,23 +43,23 @@ def _():
 def _():
     # GPT5系のモデル
     GPT5_MODELS = [
-        # "gpt-5-nano-2025-08-07",
+        "gpt-5-nano-2025-08-07",
         # "gpt-5-mini-2025-08-07",
         "gpt-5-2025-08-07",
     ]
 
     # APIコール時のパラメータもパターンを用意する
     GPT5_REASONING_EFFORTS = [
-        # 'minimal',
+        'minimal',
         # 'low',
-        'medium',
-        # 'high',
+        # 'medium',
+        'high',
     ]
 
     GPT5_TEXT_VERBOSITIES = [
-        # 'low',
-        'medium',
-        # 'high',
+        'low',
+        # 'medium',
+        'high',
     ]
     return GPT5_MODELS, GPT5_REASONING_EFFORTS, GPT5_TEXT_VERBOSITIES
 
@@ -99,22 +99,53 @@ def _(rprint):
         },
     ]
 
-    def search_documents(keywords):
-        """
-        keywords: "キーワード1, キーワード2, キーワード3..."
-        """
-        if '国別料金表3' in keywords:
-            response = "アンギラの国際通話料金は9999円/1分です。"
-        elif 'アンギラ' in keywords or "Angila" in keywords or "Angira" in keywords or "Anguilla" in keywords:
-            response = "アンギラの国際通話料金は国別料金表3に記載されています。"
+    from difflib import SequenceMatcher
+    import re
+
+    def _normalize(text: str) -> str:
+        return text.lower()
+
+    def _fuzzy_contains(
+        keywords: str, terms: tuple[str, ...], threshold: float = 0.72
+    ) -> bool:
+        if not keywords:
+            return False
+
+        haystack = _normalize(keywords)
+        normalized_terms = tuple(_normalize(term) for term in terms)
+
+        if any(term in haystack for term in normalized_terms):
+            return True
+
+        tokens = [token for token in re.split(r"[\s,、。]+", haystack) if token]
+        for token in tokens:
+            for term in normalized_terms:
+                if SequenceMatcher(None, token, term).ratio() >= threshold:
+                    return True
+
+        for term in normalized_terms:
+            if SequenceMatcher(None, haystack, term).ratio() >= threshold:
+                return True
+        return False
+
+    TABLE_TERMS = ("国別料金表3", "table 3")
+    TABLE_RESPONSE = "アンギラの国際通話料金は9999円/1分です。"
+
+    ANGUILLA_TERMS = ("アンギラ", "anguilla", "angila", "angira")
+    ANGUILLA_RESPONSE = "アンギラの国際通話料金は国別料金表3に記載されています。"
+
+    UNKNOWN_RESPONSE = "情報が見つかりませんでした。"
+
+    def search_documents(keywords: str) -> list[str]:
+        if _fuzzy_contains(keywords, TABLE_TERMS):
+            response = TABLE_RESPONSE
+        elif _fuzzy_contains(keywords, ANGUILLA_TERMS):
+            response = ANGUILLA_RESPONSE
         else:
-            response = "情報が見つかりませんでした。"
+            response = UNKNOWN_RESPONSE
 
         print(">>> search_documents called")
-        rprint({
-            'keywords': keywords,
-            "response": response
-        })
+        rprint({"keywords": keywords, "response": response})
         return [response]
     return ReflectionResult, client, search_documents, tools
 
@@ -141,9 +172,7 @@ def _(
         input = copy.deepcopy(input_org)
         for i in range(MAX_REFLECTIONS):
             rprint(f">>> Iteration {i + 1}/{MAX_REFLECTIONS}")
-
             # ツール実行
-            rprint("### tool select")
             response = client.responses.create(
                 model=model,
                 input=input,
@@ -171,7 +200,6 @@ def _(
                 raise "no tool choice error"
 
             # ツール結果から回答を生成
-            rprint("### answer")
             response = client.responses.create(
                 model=model,
                 input=input,
@@ -179,11 +207,10 @@ def _(
             input += response.output
 
             # リフレクション
-            rprint("### reflection")
             input += [
                 {
                     "role": "user",
-                    "content": "2. リフレクション を行ってください"
+                    "content": "「2. リフレクション」を行ってください"
                 }         
             ]
             response = client.responses.parse(
@@ -196,19 +223,19 @@ def _(
             rprint("### reflection_result")
             rprint(reflection_result)
             if reflection_result.is_completed:
-                return input
+                return input[-2:]
 
             # 次のループへ
             input += [
                 {
                     "role": "user",
-                    "content": "1. ツール選択・実行して回答を生成をリフレクションの結果に従ってやり直してください"
+                    "content": "リフレクションのアドバイスを参考に、「1. ツールを選択・実行して回答を生成」をやり直してください"
                 }
             ]
 
         # 最大試行回数に達した場合
         print(f"警告: 最大試行回数({MAX_REFLECTIONS})に達しました")
-        return input
+        return input[-2:]
     return (gen_multi_hop_gpt4,)
 
 
@@ -230,7 +257,6 @@ def _(
             rprint(f">>> Iteration {i + 1}/{MAX_REFLECTIONS}")
 
             # ツール実行
-            rprint("### tool select")
             response = client.responses.create(
                 model=model,
                 reasoning={
@@ -264,7 +290,6 @@ def _(
                 raise "no tool choice error"
 
             # ツール結果から回答を生成
-            rprint("### answer")
             response = client.responses.create(
                 model=model,
                 reasoning={
@@ -278,11 +303,10 @@ def _(
             input += response.output
 
             # リフレクション
-            rprint("### reflection")
             input += [
                 {
                     "role": "user",
-                    "content": "2. リフレクション を行ってください"
+                    "content": "「2. リフレクション」を行ってください"
                 }         
             ]
             response = client.responses.parse(
@@ -301,20 +325,20 @@ def _(
             rprint("### reflection_result")
             rprint(reflection_result)
             if reflection_result.is_completed:
-                return input
+                return input[-2:]
 
             # 次のループへ
             input += [
                 {
                     "role": "user",
-                    "content": "1. ツール選択・実行して回答を生成をリフレクションの結果に従ってやり直してください"
+                    "content": "リフレクションのアドバイスを参考に、「1. ツールを選択・実行して回答を生成」をやり直してください"
                 }
             ]
 
 
         # 最大試行回数に達した場合
         print(f"警告: 最大試行回数({MAX_REFLECTIONS})に達しました")
-        return input
+        return input[-2:]
     return (gen_multi_hop_gpt5,)
 
 
@@ -332,29 +356,32 @@ def _(
     def _():
         SYSTEM_PROMPT = """
     あなたは優秀な情報検索エージェントです。
+    ユーザの質問に対してドキュメントデータベースから検索を行い、回答を行います。
 
     以下のステップを交互に実行してユーザの質問に対して回答を行ってください。
 
 
-    1. ツール選択・実行して回答を生成
-    回答のためのツール選択と実行を行い、その結果に基づいて回答を生成してください。
-    回答できなかった場合は、その旨を言語化してください。
-
-    2回目以降はリフレクションのアドバイスに従って実行してください。
+    ### 1. ツールを実行して回答を生成
+    ユーザの質問に対して必要なツールの実行を行い、その結果に基づいて回答を生成してください。
+    回答出来なかった場合は、なぜ回答出来なかったか言語化してください。
 
 
-    2. リフレクション
-    ツールの実行結果と回答から、ユーザの質問に対して正しく回答できているかを評価します。
+    ### 2. リフレクション
+    「1. ツールを実行して回答を生成」で生成された回答が、ユーザの質問に対して適切であるか評価します。
 
-    評価がNGの場合は、なぜNGなのかとどうしたら改善できるかを考えアドバイスを作成してください。
-    アドバイスの内容をもとに1. ツール選択・実行して回答を生成からやり直します。
+    評価がNGの場合、ツールの検索結果から新たに必要な検索キーワードがあれば、その旨をアドバイスに記載してください。
+    アドバイスの内容をもとに「1. ツールを選択・実行して回答を生成」からやり直します。
+
     評価がOKの場合は、回答を終了します。
     """
 
         USER_PROMPT = """
+    以下のユーザの質問に対して「1. ツールを選択・実行して回答を生成」を行なってください。
+
+
     ### ユーザの質問
 
-    アンギラの国際通話の料金をドキュメントデータベースから検索して教えてください。
+    NTT docomoのアンギラへの国際通話の料金を教えてください。
     """
 
         input = [
@@ -369,10 +396,11 @@ def _(
         ]
 
         for model in GPT4_MODELS:
-            _input = gen_multi_hop_gpt4(input, model)
+            print(f"### {model} ###")
+            output = gen_multi_hop_gpt4(input, model)
             rprint({
                 "model": model,
-                "input": _input,
+                "output": output,
             })
 
         # # 網羅的な組み合わせを生成
@@ -380,10 +408,11 @@ def _(
 
         # 結果を表示
         for i, (model, effort, verbosity) in enumerate(combinations, 1):
-            _input = gen_multi_hop_gpt5(input, model, effort, verbosity)
+            print(f"### {model} effort: {effort} verbosity: {verbosity} ###")
+            output = gen_multi_hop_gpt5(input, model, effort, verbosity)
             rprint({
                 "model": model,
-                "input": _input,
+                "output": output,
                 "effort": effort,
                 "verbosity": verbosity,
             })

@@ -20,7 +20,7 @@ def _(mo):
 
     ## 解きたい問題の例
 
-    「アンギラの国際通話の料金を教えてください。」
+    「NTT docomoのアンギラへの国際通話の料金を教えてください。」
 
 
     ## 擬似的なベクトルDB検索関数
@@ -51,14 +51,6 @@ def _(mo):
     ```
 
 
-    ## システムプロンプト
-
-    ```
-    あなたは優秀な情報検索者です。
-
-    与えられたツールを使って情報を検索しユーザの質問に答えてください。
-    検索された情報に不足があれば、再度検索を行っても構いません。
-    ```
 
 
     ## 実装パターン
@@ -66,6 +58,15 @@ def _(mo):
     ### tool callを連続的に行ってマルチホップ行うパターン
 
     multi_hop_with_multi_tool_call.py
+
+    - システムプロンプト
+
+    ```
+    あなたは優秀な情報検索者です。
+
+    与えられたツールを使って情報を検索しユーザの質問に答えてください。
+    検索された情報に不足があれば、再度検索を行っても構いません。
+    ```
 
 
     ```python
@@ -152,7 +153,6 @@ def _(mo):
     - gpt-5は「effort: minimal」だと割とうまくいくが、「effort: high」だとうまくいかない
       「effort: high」の場合、質問の背景なども考慮してしまい満足な回答を出せずに困っているイメージ
       「effort: minimal」だと考える時間が無く、即答に近い形なのでうまくいく？
-
 
     ```
     ### gpt-5-nano-2025-08-07 effort: minimal verbosity: low ###
@@ -443,6 +443,126 @@ def _(mo):
             )
         ]
     }
+    ```
+
+
+    ### systemプロンプトに処理フローを書いてマルチホップを行うパターン
+
+    multi_hop_with_reflection.py
+
+    - システムプロンプト
+
+    ```
+    あなたは優秀な情報検索エージェントです。
+
+    以下のステップを交互に実行してユーザの質問に対して回答を行ってください。
+
+
+    1. ツール選択・実行して回答を生成
+    回答のためのツール選択と実行を行い、その結果に基づいて回答を生成してください。
+    回答できなかった場合は、その旨を言語化してください。
+
+    2回目以降はリフレクションのアドバイスに従って実行してください。
+
+
+    2. リフレクション
+    ツールの実行結果と回答から、ユーザの質問に対して正しく回答できているかを評価します。
+
+    評価がNGの場合は、なぜNGなのかとどうしたら改善できるかを考えアドバイスを作成してください。
+    アドバイスの内容をもとに1. ツール選択・実行して回答を生成からやり直します。
+    評価がOKの場合は、回答を終了します。
+    ```
+
+    ```python
+    def gen_multi_hop_gpt5(input_org, model, effort, verbosity):
+        "\"\"gpt5系のapiコール"\"\"
+        input = copy.deepcopy(input_org)
+        for i in range(MAX_REFLECTIONS):
+            rprint(f">>> Iteration {i + 1}/{MAX_REFLECTIONS}")
+
+            # ツール実行
+            response = client.responses.create(
+                model=model,
+                reasoning={
+                    "effort": effort
+                },
+                text={
+                    "verbosity": verbosity
+                },
+                input=input,
+                tools=tools,
+                tool_choice="required", # tool実行を強制する
+            )
+            input += response.output
+
+            # 関数呼び出しの処理
+            has_function_call = False
+            for item in response.output:
+                if item.type == "function_call" and item.name == "search_documents":
+                    documents = search_documents(**json.loads(item.arguments))
+                    input.append({
+                        "type": "function_call_output",
+                        "call_id": item.call_id,
+                        "output": json.dumps({
+                          "documents": documents
+                        })
+                    })
+                    has_function_call = True
+
+            # 関数呼び出しがなければエラー
+            if not has_function_call:
+                raise "no tool choice error"
+
+            # ツール結果から回答を生成
+            response = client.responses.create(
+                model=model,
+                reasoning={
+                    "effort": effort
+                },
+                text={
+                    "verbosity": verbosity
+                },
+                input=input,
+            )
+            input += response.output
+
+            # リフレクション
+            input += [
+                {
+                    "role": "user",
+                    "content": "2. リフレクション を行ってください"
+                }
+            ]
+            response = client.responses.parse(
+                model=model,
+                reasoning={
+                    "effort": effort
+                },
+                text={
+                    "verbosity": verbosity
+                },
+                input=input,
+                text_format=ReflectionResult,
+            )
+            input += response.output
+            reflection_result = response.output_parsed
+            rprint("### reflection_result")
+            rprint(reflection_result)
+            if reflection_result.is_completed:
+                return input
+
+            # 次のループへ
+            input += [
+                {
+                    "role": "user",
+                    "content": "1. ツール選択・実行して回答を生成をリフレクションの結果に従ってやり直してください"
+                }
+            ]
+
+
+        # 最大試行回数に達した場合
+        print(f"警告: 最大試行回数({MAX_REFLECTIONS})に達しました")
+        return input
     ```
     """)
     return

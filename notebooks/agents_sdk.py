@@ -7,9 +7,12 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     import marimo as mo
+
     from agents import Agent, Runner, function_tool
+    from agents.model_settings import ModelSettings
     from rich import print as rprint
-    return Agent, Runner, function_tool, mo, rprint
+    from itertools import product
+    return Agent, ModelSettings, Runner, function_tool, mo, product, rprint
 
 
 @app.cell
@@ -102,29 +105,29 @@ def _():
 
     # APIコール時のパラメータもパターンを用意する
     GPT5_REASONING_EFFORTS = [
-        # 'minimal',
+        'minimal',
         # 'low',
-        "medium",
-        # 'high',
+        # "medium",
+        'high',
     ]
 
     GPT5_TEXT_VERBOSITIES = [
-        # 'low',
-        "medium",
-        # 'high',
+        'low',
+        # "medium",
+        'high',
     ]
-    return (GPT5_MODELS,)
+    return GPT5_MODELS, GPT5_REASONING_EFFORTS, GPT5_TEXT_VERBOSITIES
 
 
 @app.cell
 def _(Agent, Runner, search_documents):
-    async def gen(input: str, model: str):
+    async def gen_gpt4(input: str, model: str):
         INSTARUCTIONS = """
-        あなたは優秀な検索エージェントです。
+    あなたは優秀な検索エージェントです。
 
-        与えられたツールを使って情報を検索しユーザの質問に答えてください。
-        検索された情報に不足があれば、再度検索を行っても構いません。
-        """
+    与えられたツールを使って情報を検索しユーザの質問に答えてください。
+    検索された情報に不足があれば、再度検索を行っても構いません。
+    """
 
         agent = Agent(
             name="検索エージェント",
@@ -135,16 +138,52 @@ def _(Agent, Runner, search_documents):
 
         result = await Runner.run(agent, input=input)
         return result.final_output
-    return (gen,)
+    return (gen_gpt4,)
 
 
 @app.cell
-async def _(GPT4_MODELS, GPT5_MODELS, gen, rprint):
+def _(Agent, ModelSettings, Runner, search_documents):
+    async def gen_gpt5(input: str, model: str, effort: str, verbosity: str):
+        INSTARUCTIONS = """
+    あなたは優秀な検索エージェントです。
+
+    与えられたツールを使って情報を検索しユーザの質問に答えてください。
+    検索された情報に不足があれば、再度検索を行っても構いません。
+    """
+
+        agent = Agent(
+            name="検索エージェント",
+            instructions=INSTARUCTIONS,
+            tools=[search_documents],
+            model=model,
+            model_settings=ModelSettings(
+                effort=effort,
+                verbosity=verbosity,
+            )
+        )
+
+        result = await Runner.run(agent, input=input)
+        return result.final_output
+    return (gen_gpt5,)
+
+
+@app.cell
+async def _(
+    GPT4_MODELS,
+    GPT5_MODELS,
+    GPT5_REASONING_EFFORTS,
+    GPT5_TEXT_VERBOSITIES,
+    gen_gpt4,
+    gen_gpt5,
+    product,
+    rprint,
+):
     async def _():
-        input = "アンギラの国際通話の料金を教えてください。"
+        input = "NTT docomoのアンギラへの国際通話の料金を教えてください。"
 
         for model in GPT4_MODELS:
-            final_output = await gen(input, model)
+            print(f"### {model} ###")
+            final_output = await gen_gpt4(input, model)
             rprint(
                 {
                     "model": model,
@@ -152,8 +191,13 @@ async def _(GPT4_MODELS, GPT5_MODELS, gen, rprint):
                 }
             )
 
-        for model in GPT5_MODELS:
-            final_output = await gen(input, model)
+        # # 網羅的な組み合わせを生成
+        combinations = list(product(GPT5_MODELS, GPT5_REASONING_EFFORTS, GPT5_TEXT_VERBOSITIES))
+
+        # 結果を表示
+        for i, (model, effort, verbosity) in enumerate(combinations, 1):
+            print(f"### {model} effort: {effort} verbosity: {verbosity} ###")
+            final_output = await gen_gpt5(input, model, effort, verbosity)
             rprint(
                 {
                     "model": model,
