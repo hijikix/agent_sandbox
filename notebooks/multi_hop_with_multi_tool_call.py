@@ -50,16 +50,16 @@ def _():
 
     # APIコール時のパラメータもパターンを用意する
     GPT5_REASONING_EFFORTS = [
-        # 'minimal',
+        'minimal',
         # 'low',
-        'medium',
-        # 'high',
+        # 'medium',
+        'high',
     ]
 
     GPT5_TEXT_VERBOSITIES = [
-        # 'low',
-        'medium',
-        # 'high',
+        'low',
+        # 'medium',
+        'high',
     ]
     return GPT5_MODELS, GPT5_REASONING_EFFORTS, GPT5_TEXT_VERBOSITIES
 
@@ -271,6 +271,7 @@ def _(
         ]
 
         for model in GPT4_MODELS:
+            print(f"### {model} ###")
             plan = gen_multi_hop_gpt4(input, model)
             rprint({
                 "model": model,
@@ -282,6 +283,7 @@ def _(
 
         # 結果を表示
         for i, (model, effort, verbosity) in enumerate(combinations, 1):
+            print(f"### {model} effort: {effort} verbosity: {verbosity} ###")
             output = gen_multi_hop_gpt5(input, model, effort, verbosity)
             rprint({
                 "model": model,
