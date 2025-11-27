@@ -8,11 +8,11 @@ app = marimo.App(width="medium")
 def _():
     import marimo as mo
 
-    from agents import Agent, Runner, function_tool
+    from agents import Agent, Runner
     from agents.model_settings import ModelSettings
     from rich import print as rprint
     from itertools import product
-    return Agent, ModelSettings, Runner, function_tool, mo, product, rprint
+    return Agent, ModelSettings, Runner, mo, product, rprint
 
 
 @app.cell
@@ -29,60 +29,6 @@ def _(mo):
     ### agents_sdkによる実装
     """)
     return
-
-
-@app.cell
-def _(function_tool, rprint):
-    from difflib import SequenceMatcher
-    import re
-
-    def _normalize(text: str) -> str:
-        return text.lower()
-
-    def _fuzzy_contains(
-        keywords: str, terms: tuple[str, ...], threshold: float = 0.72
-    ) -> bool:
-        if not keywords:
-            return False
-
-        haystack = _normalize(keywords)
-        normalized_terms = tuple(_normalize(term) for term in terms)
-
-        if any(term in haystack for term in normalized_terms):
-            return True
-
-        tokens = [token for token in re.split(r"[\s,、。]+", haystack) if token]
-        for token in tokens:
-            for term in normalized_terms:
-                if SequenceMatcher(None, token, term).ratio() >= threshold:
-                    return True
-
-        for term in normalized_terms:
-            if SequenceMatcher(None, haystack, term).ratio() >= threshold:
-                return True
-        return False
-
-    TABLE_TERMS = ("国別料金表3", "table 3")
-    TABLE_RESPONSE = "アンギラの国際通話料金は9999円/1分です。"
-
-    ANGUILLA_TERMS = ("アンギラ", "anguilla", "angila", "angira")
-    ANGUILLA_RESPONSE = "アンギラの国際通話料金は国別料金表3に記載されています。"
-
-    UNKNOWN_RESPONSE = "情報が見つかりませんでした。"
-
-    @function_tool
-    def search_documents(keywords: str) -> list[str]:
-        if _fuzzy_contains(keywords, TABLE_TERMS):
-            response = TABLE_RESPONSE
-        elif _fuzzy_contains(keywords, ANGUILLA_TERMS):
-            response = ANGUILLA_RESPONSE
-        else:
-            response = UNKNOWN_RESPONSE
-
-        print(">>> search_documents called")
-        rprint({"keywords": keywords, "response": response})
-        return [response]
-    return (search_documents,)
 
 
 @app.cell
@@ -105,30 +51,38 @@ def _():
 
     # APIコール時のパラメータもパターンを用意する
     GPT5_REASONING_EFFORTS = [
-        'minimal',
+        "minimal",
         # 'low',
         # "medium",
-        'high',
+        "high",
     ]
 
     GPT5_TEXT_VERBOSITIES = [
-        'low',
+        "low",
         # "medium",
-        'high',
+        "high",
     ]
     return GPT5_MODELS, GPT5_REASONING_EFFORTS, GPT5_TEXT_VERBOSITIES
 
 
 @app.cell
-def _(Agent, Runner, search_documents):
-    async def gen_gpt4(input: str, model: str):
-        INSTARUCTIONS = """
+def _():
+    from tools import search_documents
+
+    INSTARUCTIONS = """
     あなたは優秀な検索エージェントです。
 
     与えられたツールを使って情報を検索しユーザの質問に答えてください。
+    内部知識は使わずにツールから取得した情報のみを使って答えるようにしてください。
+
     検索された情報に不足があれば、再度検索を行っても構いません。
     """
+    return INSTARUCTIONS, search_documents
 
+
+@app.cell
+def _(Agent, INSTARUCTIONS, Runner, search_documents):
+    async def gen_gpt4(input: str, model: str):
         agent = Agent(
             name="検索エージェント",
             instructions=INSTARUCTIONS,
@@ -142,15 +96,8 @@ def _(Agent, Runner, search_documents):
 
 
 @app.cell
-def _(Agent, ModelSettings, Runner, search_documents):
+def _(Agent, INSTARUCTIONS, ModelSettings, Runner, search_documents):
     async def gen_gpt5(input: str, model: str, effort: str, verbosity: str):
-        INSTARUCTIONS = """
-    あなたは優秀な検索エージェントです。
-
-    与えられたツールを使って情報を検索しユーザの質問に答えてください。
-    検索された情報に不足があれば、再度検索を行っても構いません。
-    """
-
         agent = Agent(
             name="検索エージェント",
             instructions=INSTARUCTIONS,
@@ -159,7 +106,7 @@ def _(Agent, ModelSettings, Runner, search_documents):
             model_settings=ModelSettings(
                 effort=effort,
                 verbosity=verbosity,
-            )
+            ),
         )
 
         result = await Runner.run(agent, input=input)
@@ -179,7 +126,7 @@ async def _(
     rprint,
 ):
     async def _():
-        input = "NTT docomoのアンギラへの国際通話の料金を教えてください。"
+        input = "ネクサス3000に搭載されているCPUの製造元の本社所在地は？"
 
         for model in GPT4_MODELS:
             print(f"### {model} ###")
@@ -192,7 +139,9 @@ async def _(
             )
 
         # # 網羅的な組み合わせを生成
-        combinations = list(product(GPT5_MODELS, GPT5_REASONING_EFFORTS, GPT5_TEXT_VERBOSITIES))
+        combinations = list(
+            product(GPT5_MODELS, GPT5_REASONING_EFFORTS, GPT5_TEXT_VERBOSITIES)
+        )
 
         # 結果を表示
         for i, (model, effort, verbosity) in enumerate(combinations, 1):
